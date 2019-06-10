@@ -220,11 +220,11 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300
         if logL_diff < thres:
             # Print a message to the console
             print('@' * 17, 'The Log Likelihood has converged', '@' * 17)
-            # Delete the first logL value of -inf
-            logL.pop(0)
             # Break the loop
             break
 
+    # Delete the first logL value of -inf
+    logL.pop(0)
     # Create a log with the LogL, Diff and Reconstruction Error lists
     with open(img_filename[:-4] + '_K_' + str(K) + "_log.txt", 'w') as logfile:
         # Write to logfile the contents of logL list
