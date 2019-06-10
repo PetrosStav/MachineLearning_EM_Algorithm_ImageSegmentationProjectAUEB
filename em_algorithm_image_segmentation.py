@@ -7,9 +7,9 @@ import copy
 np.random.seed(1993)
 
 
-# Method that calculates and returns the gammas (aposteriori probabilities), as well as the px (mixture distribution)
-# using the pis (apriori probabilities), the means and the sigma squared values for all x and k
-def get_gammas_px(x, pi, mi, sigma):
+# Method that calculates and returns the px (mixture distribution) and the nominator of the gammas using
+# the pis (apriori probabilities), the means and the sigma squared values for all x and k
+def get_px(x, pi, mi, sigma):
     # Get the N dimension from x
     N = x.shape[0]
     # Get the K dimension from pi
@@ -25,12 +25,20 @@ def get_gammas_px(x, pi, mi, sigma):
         gam[:, k] = pi[k] * np.prod(tmp1 * tmp2, axis=1)
     # Calculate the px (mixture distribution) by summing the gam matrix by K (axis 1)
     px = np.sum(gam, axis=1)
-    # For k from 0 to K-1
+    # Return the px (mixture distribution)
+    return px, gam
+
+
+# Method that calculates and returns the gammas (aposteriori probabilities) using the nominator of the gammas
+# and the p(x) mixture distribution
+def get_gammas(gam, px):
+    # Get the K dimension from pi
+    K = gam.shape[1]
     for k in range(K):
         # Divide the gam matrix with the px for every k to get the gammas
         gam[:, k] = gam[:, k] / px
     # Returns the gammas and the px
-    return gam, px
+    return gam
 
 
 # Method that calculates and returns the new mean values using the new gammas for all k and d
@@ -96,7 +104,7 @@ def calc_error(x_true, x_r):
 
 
 # Main method that performs the EM Algorithm for the image segmentation using the arguments
-def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=500, thres=1e-2, show_figs=True, save_figs=True):
+def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300, thres=1e-2, show_figs=True, save_figs=True):
     # Load and read the image pixels using pyplot
     img = plt.imread(img_filename)
     # Reshape and normalize the image pixels to 0.0-1.0 float values
@@ -107,8 +115,6 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=500
     N = len(x)
     # The D dimension is 3 - RGB
     D = 3
-    # Initialize a bool variable to false that indicates whether the algorithm has converged
-    converged = False
 
     # Print info to the console
     print('-' * 30)
@@ -136,14 +142,11 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=500
     new_x = None
     # Append the minus infinity to the log likelihood list
     logL.append(float('-inf'))
+    # Get the p(x) mixture distribution and the nominator of the gammas
+    px, gammas = get_px(x, pi, mi, sigma)
     # For the steps specified by the arguments
     for s in range(steps):
-        # If the algorithm has converged
-        if converged:
-            # Print a message to the console
-            print('@' * 17, 'The Log Likelihood has converged', '@' * 17)
-            # Break the loop
-            break
+
         # Print the STEP to the console
         print('=' * 30, 'STEP %s' % s, '=' * 30)
 
@@ -152,21 +155,10 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=500
         # Print to the console that the algorithm is in the expectation step
         print('-' * 27, "Expectation ", '-' * 27)
         # Calculate the new gamma values and the px mixture distribution
-        gammas, px = get_gammas_px(x, pi, mi, sigma)
-        # Calculate the log likelihood loss and append it to the list
-        logL.append(calc_loss(px))
-        # Calculate the log likelihood loss difference from the previous step
-        logL_diff = logL[-1] - logL[-2]
-        # Append the log likelihood difference to the list
-        logLdiffs.append(logL_diff)
-        # Print the log likelihood and the difference from the previous step to the console
-        print("\nLog Likelihood: %f\nDiff: %f\n" % (logL[-1], logL_diff))
-        # Check that the log loss is increasing and check for threshold convergence
-        if logL_diff < 0:
-            print('ERROR: Log Likelihood is not increasing!!')
-            exit(1)
-        if np.abs(logL_diff) < thres:
-            converged = True
+        gammas = get_gammas(gammas, px)
+        # Print the new gamma values
+        # print('gamma values: ', gammas)
+        print('\nCalculated new gamma values\n')
 
         """ Maximization step """
 
@@ -180,9 +172,24 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=500
         pi = new_pk(gammas)
 
         # Print the new vals of mi, sigma squared and pi values
-        print('\nAnalytics\n')
-        print('mi values: %s\nsigma squared values: %s\npi values: %s' % (
-            str([e for e in mi]), str([e for e in sigma]), str([e for e in pi])))
+        # print('mi values: %s\nsigma squared values: %s\npi values: %s' % (
+        #     str([e for e in mi]), str([e for e in sigma]), str([e for e in pi])))
+        print('\nCalculated new mi, sigma squared and pi values\n')
+
+        """ LogLikelihood and Reconstruction Error """
+        # Print to the console that the algorithm is in the expectation step
+        print('-' * 27, "LogL / Error", '-' * 27)
+
+        # Calculate the px (mixture distribution) and the nominator of the gammas
+        px, gammas = get_px(x, pi, mi, sigma)
+        # Calculate the log likelihood loss and append it to the list
+        logL.append(calc_loss(px))
+        # Calculate the log likelihood loss difference from the previous step
+        logL_diff = logL[-1] - logL[-2]
+        # Append the log likelihood difference to the list
+        logLdiffs.append(logL_diff)
+        # Print the log likelihood and the difference from the previous step to the console
+        print("\nLog Likelihood: %f\nDiff: %f" % (logL[-1], logL_diff))
 
         # Get the new image pixels using the correct mean value in regard to the argmax index k for each x
         # from the gammas
@@ -193,7 +200,7 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=500
         errors.append(calc_error(x_true, new_x))
 
         # Print the error to the console
-        print("\nError: %f\n" % errors[-1])
+        print("Reconstruction Error: %f\n" % errors[-1])
 
         # Show image every plot_interval iterations if plot_interval is not -1
         if plot_interval != -1 and s % plot_interval == 0:
@@ -205,6 +212,32 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=500
             plt.imshow(new_img)
             # Show the image
             plt.show()
+
+        # Check that the log loss is increasing and check for threshold convergence
+        if logL_diff < 0:
+            print('ERROR: Log Likelihood is not increasing!!')
+            exit(1)
+        if np.abs(logL_diff) < thres:
+            # Print a message to the console
+            print('@' * 17, 'The Log Likelihood has converged', '@' * 17)
+            # Delete the first logL value of -inf
+            logL.pop(0)
+            # Create a log with the LogL, Diff and Reconstruction Error lists
+            with open(img_filename[:-4] + '_K_' + str(K) + "_log.txt", 'w') as logfile:
+                # Write to logfile the contents of logL list
+                logfile.write('Log Likelihood List\n')
+                logfile.write(str(logL))
+                logfile.write('\n')
+                # Write to logfile the contents of logLdiffs list
+                logfile.write('Log Likelihood Diff List\n')
+                logfile.write(str(logLdiffs))
+                logfile.write('\n')
+                # Write to logfile the contents of errors list
+                logfile.write('Reconstruction Error List\n')
+                logfile.write(str(errors))
+                logfile.write('\n')
+            # Break the loop
+            break
 
     # Reshape the new image
     new_img = np.asarray(new_x).reshape(img.shape[0], img.shape[1], img.shape[2])
