@@ -217,27 +217,28 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300
         if logL_diff < 0:
             print('ERROR: Log Likelihood is not increasing!!')
             exit(1)
-        if np.abs(logL_diff) < thres:
+        if logL_diff < thres:
             # Print a message to the console
             print('@' * 17, 'The Log Likelihood has converged', '@' * 17)
             # Delete the first logL value of -inf
             logL.pop(0)
-            # Create a log with the LogL, Diff and Reconstruction Error lists
-            with open(img_filename[:-4] + '_K_' + str(K) + "_log.txt", 'w') as logfile:
-                # Write to logfile the contents of logL list
-                logfile.write('Log Likelihood List\n')
-                logfile.write(str(logL))
-                logfile.write('\n')
-                # Write to logfile the contents of logLdiffs list
-                logfile.write('Log Likelihood Diff List\n')
-                logfile.write(str(logLdiffs))
-                logfile.write('\n')
-                # Write to logfile the contents of errors list
-                logfile.write('Reconstruction Error List\n')
-                logfile.write(str(errors))
-                logfile.write('\n')
             # Break the loop
             break
+
+    # Create a log with the LogL, Diff and Reconstruction Error lists
+    with open(img_filename[:-4] + '_K_' + str(K) + "_log.txt", 'w') as logfile:
+        # Write to logfile the contents of logL list
+        logfile.write('Log Likelihood List\n')
+        logfile.write(str(logL))
+        logfile.write('\n')
+        # Write to logfile the contents of logLdiffs list
+        logfile.write('Log Likelihood Diff List\n')
+        logfile.write(str(logLdiffs))
+        logfile.write('\n')
+        # Write to logfile the contents of errors list
+        logfile.write('Reconstruction Error List\n')
+        logfile.write(str(errors))
+        logfile.write('\n')
 
     # Reshape the new image
     new_img = np.asarray(new_x).reshape(img.shape[0], img.shape[1], img.shape[2])
