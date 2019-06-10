@@ -1,0 +1,6 @@
+Log Likelihood List
+[2958.859363863143, 2958.859363863143]
+Log Likelihood Diff List
+[inf, 0.0]
+Reconstruction Error List
+[0.1747388687007728, 0.1747388687007728]
