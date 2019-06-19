@@ -25,8 +25,38 @@ def get_px(x, pi, mi, sigma):
         gam[:, k] = pi[k] * np.prod(tmp1 * tmp2, axis=1)
     # Calculate the px (mixture distribution) by summing the gam matrix by K (axis 1)
     px = np.sum(gam, axis=1)
-    # Return the px (mixture distribution)
+    # Return the px (mixture distribution) and the gam variable
     return px, gam
+
+
+# Method that calculates and returns the px (mixture distribution) and the nominator of the gammas using
+# the pis (apriori probabilities), the means and the sigma squared values for all x and k
+# using logsumexp trick
+def get_px_logsumexp_trick(x, pi, mi, sigma):
+    # Get the N dimension from x
+    N = x.shape[0]
+    # Get the K dimension from pi
+    K = pi.shape[0]
+    # Initialize a NxK matrix of zeroes
+    gam = np.zeros((N, K))
+    # For k from 0 to K-1
+    for k in range(K):
+        # Compute the product that is in p(x) in the projectb.pdf as it is used for the gammas
+        # Adding 1e-100 to denominators so that there isn't a division by 0 creating nans
+        # using logsumexp_trick
+        tmp1 = np.log(1 / np.sqrt(2 * np.pi * sigma[k] + 1e-100)) - np.power(x - mi[k], 2) / (2 * sigma[k] + 1e-100)
+        gam[:, k] = np.log(pi[k]) + np.sum(tmp1, axis=1)
+    # Get max for logsumexp_trick
+    m = gam.max(axis=1)
+    # Subtract max from gam
+    for k in range(K):
+        gam[:, k] = gam[:, k] - m
+    # Pass gam from the exp function
+    gam = np.exp(gam)
+    # Calculate the px (mixture distribution) by summing the gam matrix by K (axis 1)
+    px = np.sum(gam, axis=1)
+    # Return the px (mixture distribution), gam variable and the maximum
+    return px, gam, m
 
 
 # Method that calculates and returns the gammas (aposteriori probabilities) using the nominator of the gammas
@@ -97,6 +127,12 @@ def calc_loss(px):
     return np.sum(np.log(px))
 
 
+# Method that calculates and returns the log likelihood loss
+# using logsumexp trick
+def calc_loss_logsumexp_trick(px, m):
+    return np.sum(m + np.log(px))
+
+
 # Method that calculates and returns the reconstruction error using the real pixel values and the
 # ones that are replaced by the means
 def calc_error(x_true, x_r):
@@ -104,7 +140,8 @@ def calc_error(x_true, x_r):
 
 
 # Main method that performs the EM Algorithm for the image segmentation using the arguments
-def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300, thres=1e-2, show_figs=True, save_figs=True):
+def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300, thres=1e-2, show_figs=True,
+                       save_figs=True, logsumexp_trick=True):
     # Load and read the image pixels using pyplot
     img = plt.imread(img_filename)
     # Reshape and normalize the image pixels to 0.0-1.0 float values
@@ -115,6 +152,8 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300
     N = len(x)
     # The D dimension is 3 - RGB
     D = 3
+    # Initialize max for logsumexp trick
+    m = None
 
     # Print info to the console
     print('-' * 30)
@@ -143,7 +182,10 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300
     # Append the minus infinity to the log likelihood list
     logL.append(float('-inf'))
     # Get the p(x) mixture distribution and the nominator of the gammas
-    px, gammas = get_px(x, pi, mi, sigma)
+    if logsumexp_trick:
+        px, gammas, m = get_px_logsumexp_trick(x, pi, mi, sigma)
+    else:
+        px, gammas = get_px(x, pi, mi, sigma)
     # For the steps specified by the arguments
     for s in range(steps):
 
@@ -181,9 +223,15 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300
         print('-' * 27, "LogL / Error", '-' * 27)
 
         # Calculate the px (mixture distribution) and the nominator of the gammas
-        px, gammas = get_px(x, pi, mi, sigma)
+        if logsumexp_trick:
+            px, gammas, m = get_px_logsumexp_trick(x, pi, mi, sigma)
+        else:
+            px, gammas = get_px(x, pi, mi, sigma)
         # Calculate the log likelihood loss and append it to the list
-        logL.append(calc_loss(px))
+        if logsumexp_trick:
+            logL.append(calc_loss_logsumexp_trick(px, m))
+        else:
+            logL.append(calc_loss(px))
         # Calculate the log likelihood loss difference from the previous step
         logL_diff = logL[-1] - logL[-2]
         # Append the log likelihood difference to the list
@@ -320,4 +368,4 @@ def image_segmentation(img_filename='./im.jpg', K=2, plot_interval=-1, steps=300
 
 # Run the image segmentation algorithm for different values of K
 for k in [1, 2, 4, 8, 16, 32, 64]:
-    image_segmentation(K=k, thres=0.1)
+    image_segmentation(K=k, thres=0.1, logsumexp_trick=True)
